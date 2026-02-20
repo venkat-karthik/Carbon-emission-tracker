@@ -2,34 +2,34 @@
 
 import { useEffect, useState } from "react";
 import { Zap, Leaf, IndianRupee, TrendingUp, Activity } from "lucide-react";
-import { iotManager } from "@/lib/iot-sensors";
 import { cn } from "@/lib/utils";
 
 export default function EnergyMetrics() {
   const [metrics, setMetrics] = useState<any>(null);
 
   useEffect(() => {
-    // Start real-time updates
-    iotManager.startRealTimeUpdates(5000);
+    let isMounted = true;
 
-    const updateMetrics = () => {
-      const campusMetrics = iotManager.getTotalCampusMetrics();
-      setMetrics(campusMetrics);
+    const fetchMetrics = async () => {
+      try {
+        const response = await fetch("/api/iot");
+        const data = await response.json();
+        if (data.success && isMounted) {
+          setMetrics(data.campusMetrics);
+        }
+      } catch (error) {
+        console.error("Failed to fetch IoT campus metrics:", error);
+      }
     };
 
-    // Initial update
-    updateMetrics();
+    // Initial fetch
+    fetchMetrics();
 
-    // Subscribe to sensor updates
-    const unsubscribe = iotManager.subscribe(() => {
-      updateMetrics();
-    });
-
-    // Update every 5 seconds
-    const interval = setInterval(updateMetrics, 5000);
+    // Poll server every 5 seconds for new IoT readings
+    const interval = setInterval(fetchMetrics, 5000);
 
     return () => {
-      unsubscribe();
+      isMounted = false;
       clearInterval(interval);
     };
   }, []);
@@ -152,7 +152,7 @@ export default function EnergyMetrics() {
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-xs">
           <div className="font-semibold text-red-600 mb-1">⚠️ Wastage Detected</div>
           <div className="text-muted-foreground">
-            {metrics.wastageAlerts} active wastage alert{metrics.wastageAlerts > 1 ? 's' : ''} detected. 
+            {metrics.wastageAlerts} active wastage alert{metrics.wastageAlerts > 1 ? 's' : ''} detected.
             Check alerts page for details.
           </div>
         </div>

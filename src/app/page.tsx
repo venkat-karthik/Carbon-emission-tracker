@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Zap,
@@ -36,7 +36,6 @@ import {
 import GreenGauge from "@/components/dashboard/GreenGauge";
 import Sparkline from "@/components/dashboard/Sparkline";
 import EnergyMetrics from "@/components/dashboard/EnergyMetrics";
-import { categoryScores, topIssues, latestAlerts, greenIndexScore } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -60,11 +59,66 @@ const severityColors: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const [resolveModal, setResolveModal] = useState<(typeof topIssues)[0] | null>(null);
+  const [dashboardData, setDashboardData] = useState({
+    greenIndexScore: 0,
+    categoryScores: [] as any[],
+    topIssues: [] as any[],
+    latestAlerts: [] as any[],
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDashboard = async () => {
+      try {
+        const res = await fetch("/api/dashboard");
+        const data = await res.json();
+        if (data.success && isMounted) {
+          setDashboardData(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchDashboard();
+    const interval = setInterval(fetchDashboard, 60000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const { greenIndexScore, categoryScores, topIssues, latestAlerts } = dashboardData;
+
+  const [resolveModal, setResolveModal] = useState<any>(null);
   const [sourcesModal, setSourcesModal] = useState(false);
   const [liveDataModal, setLiveDataModal] = useState(false);
   const [selectedAction, setSelectedAction] = useState<any>(null);
   const [completedActions, setCompletedActions] = useState<number[]>([]);
+  const [liveSensors, setLiveSensors] = useState<any[]>([]);
+
+  // Fetch live sensors when modal is open
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (liveDataModal) {
+      const fetchSensors = async () => {
+        try {
+          const res = await fetch("/api/iot");
+          const data = await res.json();
+          if (data.success && data.allSensors) {
+            setLiveSensors(data.allSensors);
+          }
+        } catch (error) {
+          console.error("Failed to fetch live sensors:", error);
+        }
+      };
+      fetchSensors();
+      interval = setInterval(fetchSensors, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [liveDataModal]);
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
@@ -288,7 +342,7 @@ export default function DashboardPage() {
           </div>
           <span className="text-xs text-muted-foreground">Improve your Green Index</span>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
             {
@@ -403,10 +457,10 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </div>
-                
+
                 <h3 className="font-semibold text-foreground mb-1">{action.title}</h3>
                 <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{action.description}</p>
-                
+
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <div className="bg-muted rounded-lg p-2">
                     <div className="text-xs text-muted-foreground">Cost</div>
@@ -417,13 +471,13 @@ export default function DashboardPage() {
                     <div className="text-sm font-bold text-foreground">{action.co2}</div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center justify-between text-xs">
                   <span className={cn(
                     "px-2 py-0.5 rounded-full font-medium",
                     action.difficulty === "Easy" ? "bg-green-500/10 text-green-600" :
-                    action.difficulty === "Medium" ? "bg-yellow-500/10 text-yellow-600" :
-                    "bg-red-500/10 text-red-600"
+                      action.difficulty === "Medium" ? "bg-yellow-500/10 text-yellow-600" :
+                        "bg-red-500/10 text-red-600"
                   )}>
                     {action.difficulty}
                   </span>
@@ -481,7 +535,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
-              
+
               <div className="pt-3 border-t-2 border-border">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-foreground">Total Monthly</span>
@@ -523,7 +577,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
-              
+
               <div className="pt-3 border-t-2 border-border">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-foreground">Total Investment</span>
@@ -712,43 +766,40 @@ export default function DashboardPage() {
               <div className="text-xs text-muted-foreground mb-3">
                 Real-time sensor updates • Refreshing every 5 seconds
               </div>
-              {[
-                { time: "11:42:15", sensor: "Energy Meter #3", value: "12.4 kW", zone: "Block B", status: "normal" },
-                { time: "11:42:12", sensor: "Water Flow #5", value: "145 L/min", zone: "Hostel Zone", status: "normal" },
-                { time: "11:42:08", sensor: "Solar Inverter", value: "8.2 kW", zone: "Main Campus", status: "normal" },
-                { time: "11:42:05", sensor: "Energy Meter #7", value: "18.9 kW", zone: "Block B", status: "high" },
-                { time: "11:42:01", sensor: "Water Flow #2", value: "98 L/min", zone: "Block A", status: "normal" },
-                { time: "11:41:58", sensor: "Energy Meter #1", value: "9.1 kW", zone: "CSE Dept", status: "normal" },
-                { time: "11:41:55", sensor: "Water Flow #8", value: "0 L/min", zone: "Lab Block", status: "offline" },
-                { time: "11:41:52", sensor: "Energy Meter #5", value: "14.2 kW", zone: "Main Campus", status: "normal" },
-              ].map((entry, idx) => (
-                <div 
-                  key={idx} 
+              {liveSensors.length > 0 ? liveSensors.map((sensor, idx) => (
+                <div
+                  key={idx}
                   className={cn(
                     "flex items-center gap-3 p-3 rounded-lg border transition-all",
-                    entry.status === "high" ? "border-red-500/30 bg-red-500/5" :
-                    entry.status === "offline" ? "border-yellow-500/30 bg-yellow-500/5" :
-                    "border-border bg-muted/30"
+                    sensor.status === "high" ? "border-red-500/30 bg-red-500/5" :
+                      sensor.status === "offline" ? "border-yellow-500/30 bg-yellow-500/5" :
+                        "border-border bg-muted/30"
                   )}
                 >
-                  <div className="text-xs text-muted-foreground w-16 flex-shrink-0">{entry.time}</div>
+                  <div className="text-xs text-muted-foreground w-16 flex-shrink-0">
+                    {new Date(sensor.lastUpdate).toLocaleTimeString()}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground">{entry.sensor}</div>
-                    <div className="text-xs text-muted-foreground">{entry.zone}</div>
+                    <div className="text-sm font-medium text-foreground">{sensor.id}</div>
+                    <div className="text-xs text-muted-foreground">{sensor.zone}</div>
                   </div>
                   <div className={cn(
                     "text-sm font-bold flex-shrink-0",
-                    entry.status === "high" ? "text-red-500" :
-                    entry.status === "offline" ? "text-yellow-500" :
-                    "text-primary"
+                    sensor.status === "high" ? "text-red-500" :
+                      sensor.status === "offline" ? "text-yellow-500" :
+                        "text-primary"
                   )}>
-                    {entry.value}
+                    {sensor.value} {sensor.unit}
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div className="text-center text-sm text-muted-foreground py-10">
+                  Waiting for sensor data...
+                </div>
+              )}
             </div>
             <div className="p-4 border-t border-border text-center">
-              <button 
+              <button
                 onClick={() => setLiveDataModal(false)}
                 className="text-xs text-primary hover:underline"
               >
@@ -775,7 +826,7 @@ export default function DashboardPage() {
                 <X className="w-5 h-5 text-muted-foreground hover:text-foreground" />
               </button>
             </div>
-            
+
             <div className="p-5 space-y-5">
               {/* Overview */}
               <div>
@@ -833,8 +884,8 @@ export default function DashboardPage() {
                   <span className={cn(
                     "px-2.5 py-1 rounded-full text-xs font-medium",
                     selectedAction.difficulty === "Easy" ? "bg-green-500/10 text-green-600" :
-                    selectedAction.difficulty === "Medium" ? "bg-yellow-500/10 text-yellow-600" :
-                    "bg-red-500/10 text-red-600"
+                      selectedAction.difficulty === "Medium" ? "bg-yellow-500/10 text-yellow-600" :
+                        "bg-red-500/10 text-red-600"
                   )}>
                     {selectedAction.difficulty}
                   </span>

@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Bell, AlertTriangle, AlertCircle, Info, CheckCircle,
   Eye, UserCheck, X, Clock, MapPin, Filter,
   ChevronDown, Upload, FileText,
 } from "lucide-react";
-import { alertsData } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 type AlertStatus = "Open" | "In Progress" | "Closed";
@@ -25,15 +24,38 @@ const statusConfig = {
 };
 
 export default function AlertsPage() {
-  const [selectedAlert, setSelectedAlert] = useState<(typeof alertsData)[0] | null>(null);
+  const [alertsData, setAlertsData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [selectedAlert, setSelectedAlert] = useState<any | null>(null);
   const [filter, setFilter] = useState<string>("All");
   const [statusFilter, setStatusFilter] = useState<string>("All");
-  const [statuses, setStatuses] = useState<Record<number, AlertStatus>>(() =>
-    Object.fromEntries(alertsData.map((a) => [a.id, a.status as AlertStatus]))
-  );
+  const [statuses, setStatuses] = useState<Record<string, AlertStatus>>({});
   const [notes, setNotes] = useState("");
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const fileInputRef = useState<HTMLInputElement | null>(null)[0];
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAlerts = async () => {
+      try {
+        const res = await fetch("/api/alerts");
+        const data = await res.json();
+        if (data.success && isMounted) {
+          setAlertsData(data.alertsData);
+          // Initialize statuses
+          const initialStatuses = Object.fromEntries(data.alertsData.map((a: any) => [a.id, a.status as AlertStatus]));
+          setStatuses(initialStatuses);
+        }
+      } catch (error) {
+        console.error("Failed to fetch alerts:", error);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchAlerts();
+    return () => { isMounted = false; };
+  }, []);
 
   const filtered = alertsData.filter((a) => {
     const typeMatch = filter === "All" || a.type === filter;
@@ -113,8 +135,8 @@ export default function AlertsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((alert) => {
-                const sev = severityConfig[alert.severity as AlertSeverity];
+              {filtered.map((alert: any) => {
+                const sev = severityConfig[alert.severity as AlertSeverity] || severityConfig.medium;
                 const SevIcon = sev.icon;
                 const status = statuses[alert.id];
                 return (
@@ -187,7 +209,7 @@ export default function AlertsPage() {
           <div className="bg-card border-l border-border shadow-2xl w-full sm:w-[420px] h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl">
             <div className="flex items-center justify-between p-5 border-b border-border sticky top-0 bg-card z-10">
               <div className="flex items-center gap-2">
-                <AlertTriangle className={cn("w-5 h-5", severityConfig[selectedAlert.severity as AlertSeverity].color)} />
+                <AlertTriangle className={cn("w-5 h-5", (severityConfig[selectedAlert.severity as AlertSeverity] || severityConfig.medium).color)} />
                 <h3 className="font-bold text-foreground">Alert Details</h3>
               </div>
               <button onClick={() => setSelectedAlert(null)}>

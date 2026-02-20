@@ -11,9 +11,7 @@ import {
   Download, Plus, Filter, ChevronDown, Info, AlertCircle,
   CheckCircle, ArrowRight, X,
 } from "lucide-react";
-import {
-  greenIndexTrend, peakHeatmapData, penaltiesCredits, analyticsInsights,
-} from "@/lib/mock-data";
+// Import removed
 import { iotManager } from "@/lib/iot-sensors";
 import { csvProcessor } from "@/lib/csv-processor";
 import { cn } from "@/lib/utils";
@@ -50,15 +48,39 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function AnalyticsPage() {
   const searchParams = useSearchParams();
   const categoryParam = searchParams.get("category");
-  
+
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeZone, setActiveZone] = useState("All Zones");
   const [showBaseline, setShowBaseline] = useState(false);
   const [createActionId, setCreateActionId] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const [selectedHeatmapCell, setSelectedHeatmapCell] = useState<{day: string, hour: string, value: number} | null>(null);
+  const [selectedHeatmapCell, setSelectedHeatmapCell] = useState<{ day: string, hour: string, value: number } | null>(null);
   const [sensorData, setSensorData] = useState<any>(null);
   const [csvData, setCSVData] = useState<any[]>([]);
+
+  const [analyticsData, setAnalyticsData] = useState({
+    greenIndexTrend: [] as any[],
+    peakHeatmapData: [] as any[],
+    penaltiesCredits: [] as any[],
+    analyticsInsights: [] as any[],
+  });
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const res = await fetch("/api/analytics");
+        const data = await res.json();
+        if (data.success) {
+          setAnalyticsData(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch analytics data:", error);
+      }
+    };
+    fetchAnalytics();
+  }, []);
+
+  const { greenIndexTrend, peakHeatmapData, penaltiesCredits, analyticsInsights } = analyticsData;
 
   // Handle category query param
   useEffect(() => {
@@ -155,7 +177,7 @@ export default function AnalyticsPage() {
           <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Deep-dive into every dimension of campus sustainability</p>
         </div>
-        <button 
+        <button
           onClick={handleExport}
           disabled={downloading}
           className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
@@ -372,8 +394,8 @@ export default function AnalyticsPage() {
                 insight.severity === "positive"
                   ? "border-green-500/30 bg-green-500/5"
                   : insight.severity === "high"
-                  ? "border-red-500/30"
-                  : "border-yellow-500/30"
+                    ? "border-red-500/30"
+                    : "border-yellow-500/30"
               )}
             >
               <div className="flex items-start justify-between mb-3">
@@ -396,8 +418,8 @@ export default function AnalyticsPage() {
                     insight.severity === "positive"
                       ? "bg-green-500/15 text-green-600"
                       : insight.severity === "high"
-                      ? "bg-red-500/15 text-red-600"
-                      : "bg-yellow-500/15 text-yellow-600"
+                        ? "bg-red-500/15 text-red-600"
+                        : "bg-yellow-500/15 text-yellow-600"
                   )}
                 >
                   {insight.impact}
@@ -473,11 +495,11 @@ export default function AnalyticsPage() {
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-xs">
                 <div className="font-semibold text-blue-600 mb-1">💡 Insight</div>
                 <div className="text-muted-foreground">
-                  {selectedHeatmapCell.value > 4 
+                  {selectedHeatmapCell.value > 4
                     ? "High usage detected. Consider load shifting to off-peak hours."
                     : selectedHeatmapCell.value > 3
-                    ? "Moderate usage. Monitor for optimization opportunities."
-                    : "Good usage level. Within optimal range."}
+                      ? "Moderate usage. Monitor for optimization opportunities."
+                      : "Good usage level. Within optimal range."}
                 </div>
               </div>
             </div>

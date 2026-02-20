@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Upload, CheckCircle, AlertCircle, Download, X, FileText, TrendingUp, Activity, RefreshCw, Wifi, WifiOff, Database, Plus, Trash2 } from "lucide-react";
 import { csvProcessor, CSV_EXAMPLE, ProcessedCSVData } from "@/lib/csv-processor";
-import { sensorsData } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 export default function DataInputPage() {
@@ -11,6 +10,23 @@ export default function DataInputPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<ProcessedCSVData | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [sensorsData, setSensorsData] = useState<any[]>([]);
+
+  // Fetch sensors data
+  useEffect(() => {
+    const fetchSensors = async () => {
+      try {
+        const res = await fetch("/api/sensors");
+        const data = await res.json();
+        if (data.success) {
+          setSensorsData(data.sensorsData);
+        }
+      } catch (error) {
+        console.error("Failed to fetch sensors data:", error);
+      }
+    };
+    fetchSensors();
+  }, []);
 
   // Sensor tab states
   const [calibrating, setCalibrating] = useState<string | null>(null);
@@ -41,12 +57,12 @@ export default function DataInputPage() {
     }
 
     setUploading(true);
-    
+
     try {
       const content = await file.text();
       const result = csvProcessor.processCSVData(content);
       setUploadResult(result);
-      
+
       // Show success message
       if (result.validRows > 0) {
         alert(`Successfully processed ${result.validRows} rows!\nData is now reflected across all dashboards.`);
@@ -61,7 +77,7 @@ export default function DataInputPage() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
-    
+
     const file = e.dataTransfer.files[0];
     if (file) {
       handleFileUpload(file);
@@ -276,7 +292,7 @@ export default function DataInputPage() {
                 <h4 className="text-sm font-semibold text-foreground mb-3">Date Range</h4>
                 <div className="bg-muted rounded-lg p-3 text-sm">
                   <span className="text-foreground">
-                    {uploadResult.dateRange.start.toLocaleString()} 
+                    {uploadResult.dateRange.start.toLocaleString()}
                   </span>
                   <span className="text-muted-foreground mx-2">→</span>
                   <span className="text-foreground">
@@ -343,7 +359,7 @@ export default function DataInputPage() {
           {stats.totalRecords > 0 && (
             <div className="bg-card rounded-2xl border border-border p-6">
               <h3 className="font-semibold text-foreground mb-4">Current Data Statistics</h3>
-              
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-muted rounded-lg p-4">
                   <div className="text-2xl font-bold text-foreground">{stats.totalRecords}</div>
@@ -404,8 +420,8 @@ export default function DataInputPage() {
                 key={sensor.id}
                 className={cn(
                   "bg-card rounded-2xl border p-5 transition-all",
-                  sensor.health === "Faulty" ? "border-red-500/30" : 
-                  sensor.health === "Warning" ? "border-yellow-500/30" : "border-border"
+                  sensor.health === "Faulty" ? "border-red-500/30" :
+                    sensor.health === "Warning" ? "border-yellow-500/30" : "border-border"
                 )}
               >
                 <div className="flex items-start justify-between mb-4">
@@ -590,7 +606,7 @@ export default function DataInputPage() {
                   <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
                     <Database className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-sm text-foreground">{entry.submitter}</span>
