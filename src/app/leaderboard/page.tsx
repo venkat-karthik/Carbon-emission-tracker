@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Trophy, TrendingUp, TrendingDown, Star, Zap, Droplets,
   Recycle, Bus, ChevronRight, Medal, Award, Shield,
 } from "lucide-react";
 import { leaderboardData } from "@/lib/mock-data";
+import { csvProcessor } from "@/lib/csv-processor";
 import { cn } from "@/lib/utils";
 
 const tabs = ["Departments", "Hostels", "Blocks"];
@@ -27,10 +28,25 @@ interface LeaderRow {
   change: number;
   badge: string | null;
   trend: string;
+  categoryScores?: {
+    energy: number;
+    water: number;
+    waste: number;
+    transport: number;
+  };
 }
 
 function LeaderCard({ row, expanded, onClick }: { row: LeaderRow; expanded: boolean; onClick: () => void }) {
   const isTop3 = row.rank <= 3;
+  
+  // Use actual category scores if available, otherwise calculate from overall score
+  const categoryScores = row.categoryScores || {
+    energy: Math.round(row.score * 0.92),
+    water: Math.round(row.score * 1.05),
+    waste: Math.round(row.score * 0.85),
+    transport: Math.round(row.score * 1.08),
+  };
+
   return (
     <div
       className={cn(
@@ -89,10 +105,10 @@ function LeaderCard({ row, expanded, onClick }: { row: LeaderRow; expanded: bool
         <div className="px-5 pb-4 pt-0 border-t border-border">
           <div className="pt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Energy", score: Math.round(row.score * 0.92), color: "text-yellow-500" },
-              { label: "Water", score: Math.round(row.score * 1.05), color: "text-blue-500" },
-              { label: "Waste", score: Math.round(row.score * 0.85), color: "text-green-500" },
-              { label: "Transport", score: Math.round(row.score * 1.08), color: "text-orange-500" },
+              { label: "Energy", score: categoryScores.energy, color: "text-yellow-500" },
+              { label: "Water", score: categoryScores.water, color: "text-blue-500" },
+              { label: "Waste", score: categoryScores.waste, color: "text-green-500" },
+              { label: "Transport", score: categoryScores.transport, color: "text-orange-500" },
             ].map((cat) => (
               <div key={cat.label} className="bg-muted rounded-lg p-2.5 text-center">
                 <div className={cn("text-lg font-bold", cat.color)}>{Math.min(100, cat.score)}</div>
@@ -115,13 +131,43 @@ function LeaderCard({ row, expanded, onClick }: { row: LeaderRow; expanded: bool
 export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = useState("Departments");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [leaderboardState, setLeaderboardState] = useState(leaderboardData);
+  const [hasUploadedData, setHasUploadedData] = useState(false);
+
+  // Subscribe to CSV data updates
+  useEffect(() => {
+    const updateLeaderboard = () => {
+      const calculatedData = csvProcessor.calculateLeaderboard();
+      
+      // Check if we have any calculated data
+      const hasData = calculatedData.departments.length > 0 || 
+                      calculatedData.hostels.length > 0 || 
+                      calculatedData.blocks.length > 0;
+
+      if (hasData) {
+        setHasUploadedData(true);
+        setLeaderboardState(calculatedData);
+      } else {
+        setHasUploadedData(false);
+        setLeaderboardState(leaderboardData);
+      }
+    };
+
+    // Initial update
+    updateLeaderboard();
+
+    // Subscribe to changes
+    const unsubscribe = csvProcessor.subscribe(updateLeaderboard);
+
+    return () => unsubscribe();
+  }, []);
 
   const data =
     activeTab === "Departments"
-      ? leaderboardData.departments
+      ? leaderboardState.departments
       : activeTab === "Hostels"
-      ? leaderboardData.hostels
-      : leaderboardData.blocks;
+      ? leaderboardState.hostels
+      : leaderboardState.blocks;
 
   const badges = [
     { icon: Zap, label: "Power Saver", desc: "Largest energy reduction", holder: "Library & Admin", color: "text-yellow-600 bg-yellow-500/10" },
@@ -141,6 +187,12 @@ export default function LeaderboardPage() {
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">Rankings drive behavior. See who leads — and who needs to step up.</p>
         </div>
+        {hasUploadedData && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-xs font-medium text-green-600">Live Data Active</span>
+          </div>
+        )}
       </div>
 
       {/* Badges */}
@@ -192,14 +244,24 @@ export default function LeaderboardPage() {
         </div>
 
         <div className="space-y-2.5">
-          {data.map((row) => (
-            <LeaderCard
-              key={row.rank}
-              row={row}
-              expanded={expandedId === row.rank}
-              onClick={() => setExpandedId(expandedId === row.rank ? null : row.rank)}
-            />
-          ))}
+          {data.length === 0 ? (
+            <div className="bg-card rounded-2xl border border-dashed border-border p-12 text-center">
+              <Trophy className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h3 className="font-semibold text-foreground mb-2">No Data Available</h3>
+              <p className="text-sm text-muted-foreground">
+                Upload CSV data with zones matching this category to see rankings.
+              </p>
+            </div>
+          ) : (
+            data.map((row) => (
+              <LeaderCard
+                key={row.rank}
+                row={row}
+                expanded={expandedId === row.rank}
+                onClick={() => setExpandedId(expandedId === row.rank ? null : row.rank)}
+              />
+            ))
+          )}
         </div>
       </div>
     </div>

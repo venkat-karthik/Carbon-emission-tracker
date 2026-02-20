@@ -1,271 +1,561 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Database, Wifi, WifiOff, AlertTriangle, CheckCircle,
-  Plus, RefreshCw, Upload, FileText, ClipboardList,
-  Trash2, Edit, Settings, Activity,
-} from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, Download, X, FileText, TrendingUp, Activity, RefreshCw, Wifi, WifiOff, Database, Plus, Trash2 } from "lucide-react";
+import { csvProcessor, CSV_EXAMPLE, ProcessedCSVData } from "@/lib/csv-processor";
 import { sensorsData } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
-const healthConfig = {
-  Good: { color: "text-green-500", bg: "bg-green-500/10", dot: "bg-green-500" },
-  Warning: { color: "text-yellow-500", bg: "bg-yellow-500/10", dot: "bg-yellow-500" },
-  Faulty: { color: "text-red-500", bg: "bg-red-500/10", dot: "bg-red-500" },
-};
-
-const tabs = ["Sensor Data", "Manual Data", "Upload CSV", "Data Audit"];
-
 export default function DataInputPage() {
-  const [activeTab, setActiveTab] = useState("Sensor Data");
-  const [formState, setFormState] = useState({
-    wasteZone: "Hostel Zone",
-    wasteSeg: 65,
-    waterTanker: "",
-    recyclingWeight: "",
-    eventName: "",
-    eventCategory: "Energy",
-    eventValue: "",
-  });
-  const [submitted, setSubmitted] = useState(false);
-  const [csvFile, setCsvFile] = useState<string | null>(null);
-  const [csvValidated, setCsvValidated] = useState(false);
-  const [csvImported, setCsvImported] = useState(false);
+  const [activeTab, setActiveTab] = useState("csv");
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<ProcessedCSVData | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+
+  // Sensor tab states
   const [calibrating, setCalibrating] = useState<string | null>(null);
   const [pinging, setPinging] = useState<string | null>(null);
-  const [faultyMarked, setFaultyMarked] = useState<string[]>([]);
-  const [showAddSensor, setShowAddSensor] = useState(false);
+
+  // Manual data tab states
+  const [manualData, setManualData] = useState({
+    zone: "Main Campus",
+    category: "Energy",
+    value: "",
+    notes: "",
+  });
+  const [manualSubmitted, setManualSubmitted] = useState(false);
+
+  // Audit tab states
+  const [auditEntries] = useState([
+    { id: "A001", submitter: "Admin", zone: "Block B", category: "Energy", value: "4.8 kWh", time: "2h ago", status: "Pending" },
+    { id: "A002", submitter: "Warden", zone: "Hostel Zone", category: "Waste", value: "48 kg", time: "5h ago", status: "Approved" },
+    { id: "A003", submitter: "Lab Tech", zone: "Block A", category: "Water", value: "2.4 L/min", time: "1d ago", status: "Rejected" },
+    { id: "A004", submitter: "Faculty", zone: "CSE Dept", category: "Energy", value: "1.2 kWh", time: "1d ago", status: "Approved" },
+  ]);
   const [auditActions, setAuditActions] = useState<Record<string, "Approved" | "Rejected">>({});
+
+  const handleFileUpload = async (file: File) => {
+    if (!file.name.endsWith('.csv')) {
+      alert('Please upload a CSV file');
+      return;
+    }
+
+    setUploading(true);
+    
+    try {
+      const content = await file.text();
+      const result = csvProcessor.processCSVData(content);
+      setUploadResult(result);
+      
+      // Show success message
+      if (result.validRows > 0) {
+        alert(`Successfully processed ${result.validRows} rows!\nData is now reflected across all dashboards.`);
+      }
+    } catch (error) {
+      alert(`Error processing CSV: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
+
+  const downloadExample = () => {
+    const blob = new Blob([CSV_EXAMPLE], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'greenindex-example.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCalibrate = (sensorId: string) => {
+    setCalibrating(sensorId);
+    setTimeout(() => {
+      setCalibrating(null);
+      alert(`Sensor ${sensorId} calibrated successfully`);
+    }, 1500);
+  };
+
+  const handlePing = (sensorId: string) => {
+    setPinging(sensorId);
+    setTimeout(() => {
+      setPinging(null);
+      alert(`Sensor ${sensorId} responded: OK`);
+    }, 1000);
+  };
+
+  const handleManualSubmit = () => {
+    if (!manualData.value) {
+      alert('Please enter a value');
+      return;
+    }
+    setManualSubmitted(true);
+    setTimeout(() => {
+      setManualSubmitted(false);
+      setManualData({ zone: "Main Campus", category: "Energy", value: "", notes: "" });
+    }, 3000);
+  };
+
+  const handleAuditAction = (entryId: string, action: "Approved" | "Rejected") => {
+    setAuditActions(prev => ({ ...prev, [entryId]: action }));
+  };
+
+  const stats = csvProcessor.getStatistics();
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <Database className="w-6 h-6 text-primary" />
-          Data Input
-        </h1>
+        <h1 className="text-2xl font-bold text-foreground">Data Input</h1>
         <p className="text-muted-foreground text-sm mt-0.5">Manage sensor feeds, manual entries, and bulk uploads</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 p-1 bg-card border border-border rounded-xl w-fit">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            onClick={() => setActiveTab(t)}
-            className={cn(
-              "px-4 py-2 text-sm rounded-lg font-medium transition-all",
-              activeTab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {t}
-          </button>
-        ))}
+      <div className="flex items-center gap-2 border-b border-border">
+        <button
+          onClick={() => setActiveTab("sensor")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+            activeTab === "sensor"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Sensor Data
+        </button>
+        <button
+          onClick={() => setActiveTab("manual")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+            activeTab === "manual"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Manual Data
+        </button>
+        <button
+          onClick={() => setActiveTab("csv")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+            activeTab === "csv"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Upload CSV
+        </button>
+        <button
+          onClick={() => setActiveTab("audit")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+            activeTab === "audit"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Data Audit
+        </button>
       </div>
 
-      {/* Sensor Data Tab */}
-      {activeTab === "Sensor Data" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">{sensorsData.length} sensors registered · {sensorsData.filter(s => s.health === "Good").length} active</div>
-            <button 
-              onClick={() => setShowAddSensor(true)}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Add Sensor
-            </button>
-          </div>
-          {showAddSensor && (
-            <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 text-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-foreground">Add New Sensor</span>
-                <button onClick={() => setShowAddSensor(false)} className="text-muted-foreground hover:text-foreground">×</button>
+      {/* CSV Upload Tab */}
+      {activeTab === "csv" && (
+        <div className="space-y-6">
+          {/* Upload Section */}
+          <div className="bg-card rounded-2xl border border-border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-foreground">Bulk CSV Upload</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Expected columns: timestamp, zone, category, value, source
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground mb-3">Contact IT Admin to register a new IoT sensor device.</p>
-              <button 
-                onClick={() => setShowAddSensor(false)}
-                className="w-full py-2 text-xs font-medium rounded-lg bg-primary text-primary-foreground"
+              <button
+                onClick={downloadExample}
+                className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border hover:bg-accent transition-colors"
               >
-                Request Sensor Registration
+                <Download className="w-4 h-4" />
+                Download Example
               </button>
             </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {sensorsData.map((sensor) => {
-              const hcfg = healthConfig[sensor.health as keyof typeof healthConfig];
-              return (
-                <div
-                  key={sensor.id}
-                  className={cn(
-                    "bg-card rounded-xl border p-4 transition-all",
-                    sensor.health === "Faulty" ? "border-red-500/30" : sensor.health === "Warning" ? "border-yellow-500/30" : "border-border"
-                  )}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className={cn("w-2 h-2 rounded-full", hcfg.dot)} />
-                        <span className="font-semibold text-sm text-foreground">{sensor.name}</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{sensor.id} · {sensor.zone} · {sensor.category}</div>
+
+            {/* Drop Zone */}
+            <div
+              onDrop={handleDrop}
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              className={cn(
+                "border-2 border-dashed rounded-xl p-12 text-center transition-all",
+                dragActive ? "border-primary bg-primary/5" : "border-border",
+                uploading && "opacity-50 pointer-events-none"
+              )}
+            >
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleFileInput}
+                className="hidden"
+                id="csv-upload"
+                disabled={uploading}
+              />
+              <label htmlFor="csv-upload" className="cursor-pointer">
+                <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground mb-1">
+                  {uploading ? "Processing..." : "Drop CSV here or click to upload"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Supports csv files up to 10MB
+                </p>
+              </label>
+            </div>
+          </div>
+
+          {/* Upload Result */}
+          {uploadResult && (
+            <div className="bg-card rounded-2xl border border-border p-6">
+              <div className="flex items-center gap-2 mb-4">
+                {uploadResult.validRows > 0 ? (
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                )}
+                <h3 className="font-semibold text-foreground">Upload Results</h3>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-muted rounded-lg p-4">
+                  <div className="text-2xl font-bold text-foreground">{uploadResult.totalRows}</div>
+                  <div className="text-xs text-muted-foreground">Total Rows</div>
+                </div>
+                <div className="bg-green-500/10 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-green-600">{uploadResult.validRows}</div>
+                  <div className="text-xs text-muted-foreground">Valid Rows</div>
+                </div>
+                <div className="bg-red-500/10 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-red-600">{uploadResult.invalidRows}</div>
+                  <div className="text-xs text-muted-foreground">Invalid Rows</div>
+                </div>
+                <div className="bg-blue-500/10 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-blue-600">{uploadResult.zones.length}</div>
+                  <div className="text-xs text-muted-foreground">Zones</div>
+                </div>
+              </div>
+
+              {/* Category Breakdown */}
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-foreground mb-3">Category Breakdown</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(uploadResult.categories).map(([category, count]) => (
+                    <div key={category} className="bg-muted rounded-lg p-3">
+                      <div className="text-lg font-bold text-foreground">{count}</div>
+                      <div className="text-xs text-muted-foreground capitalize">{category}</div>
                     </div>
-                    <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", hcfg.bg, hcfg.color)}>
-                      {sensor.health}
+                  ))}
+                </div>
+              </div>
+
+              {/* Date Range */}
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-foreground mb-3">Date Range</h4>
+                <div className="bg-muted rounded-lg p-3 text-sm">
+                  <span className="text-foreground">
+                    {uploadResult.dateRange.start.toLocaleString()} 
+                  </span>
+                  <span className="text-muted-foreground mx-2">→</span>
+                  <span className="text-foreground">
+                    {uploadResult.dateRange.end.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Zones */}
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-foreground mb-3">Zones Detected</h4>
+                <div className="flex flex-wrap gap-2">
+                  {uploadResult.zones.map(zone => (
+                    <span key={zone} className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                      {zone}
                     </span>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <div className="bg-muted rounded-lg p-2">
-                      <div className="text-xs text-muted-foreground">Reading</div>
-                      <div className="font-bold text-sm text-foreground">{sensor.reading}</div>
-                    </div>
-                    <div className="bg-muted rounded-lg p-2">
-                      <div className="text-xs text-muted-foreground">Last Ping</div>
-                      <div className="font-bold text-sm text-foreground">{sensor.lastPing}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-3">
-                    <button 
-                      onClick={() => {
-                        setCalibrating(sensor.id);
-                        setTimeout(() => setCalibrating(null), 1500);
-                      }}
-                      disabled={calibrating === sensor.id}
-                      className="flex-1 text-xs py-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
-                    >
-                      <RefreshCw className={cn("w-3 h-3", calibrating === sensor.id && "animate-spin")} /> 
-                      {calibrating === sensor.id ? "Calibrating..." : "Calibrate"}
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setPinging(sensor.id);
-                        setTimeout(() => setPinging(null), 1000);
-                      }}
-                      disabled={pinging === sensor.id}
-                      className="flex-1 text-xs py-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
-                    >
-                      <Activity className="w-3 h-3" /> 
-                      {pinging === sensor.id ? "Pinging..." : "Test Ping"}
-                    </button>
-                    {sensor.health !== "Faulty" && !faultyMarked.includes(sensor.id) && (
-                      <button 
-                        onClick={() => setFaultyMarked(prev => [...prev, sensor.id])}
-                        className="text-xs py-1.5 px-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors flex items-center gap-1"
-                      >
-                        <AlertTriangle className="w-3 h-3" />
-                      </button>
-                    )}
-                    {faultyMarked.includes(sensor.id) && (
-                      <div className="text-xs py-1.5 px-2 rounded-lg bg-red-500/20 text-red-600 font-medium">
-                        Marked Faulty
+                  ))}
+                </div>
+              </div>
+
+              {/* Errors */}
+              {uploadResult.errors.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-red-600 mb-3">Errors ({uploadResult.errors.length})</h4>
+                  <div className="bg-red-500/10 rounded-lg p-4 max-h-48 overflow-y-auto">
+                    {uploadResult.errors.slice(0, 10).map((error, index) => (
+                      <div key={index} className="text-xs text-red-600 mb-1">
+                        {error}
+                      </div>
+                    ))}
+                    {uploadResult.errors.length > 10 && (
+                      <div className="text-xs text-red-600 font-semibold mt-2">
+                        ... and {uploadResult.errors.length - 10} more errors
                       </div>
                     )}
                   </div>
                 </div>
-              );
-            })}
+              )}
+
+              {/* Success Message */}
+              {uploadResult.validRows > 0 && (
+                <div className="mt-6 bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <TrendingUp className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-green-600 mb-1">Data Successfully Integrated!</div>
+                      <div className="text-sm text-muted-foreground">
+                        Your uploaded data is now reflected across:
+                        <ul className="list-disc list-inside mt-2 space-y-1">
+                          <li>Dashboard - Updated metrics and scores</li>
+                          <li>Analytics - New data points in charts</li>
+                          <li>Alerts - Wastage detection running</li>
+                          <li>Reports - Available for export</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Current Data Statistics */}
+          {stats.totalRecords > 0 && (
+            <div className="bg-card rounded-2xl border border-border p-6">
+              <h3 className="font-semibold text-foreground mb-4">Current Data Statistics</h3>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-muted rounded-lg p-4">
+                  <div className="text-2xl font-bold text-foreground">{stats.totalRecords}</div>
+                  <div className="text-xs text-muted-foreground">Total Records</div>
+                </div>
+                {Object.entries(stats.byCategory).map(([category, count]) => (
+                  <div key={category} className="bg-muted rounded-lg p-4">
+                    <div className="text-2xl font-bold text-foreground">{count}</div>
+                    <div className="text-xs text-muted-foreground capitalize">{category}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-3">Average Values</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(stats.averageValues).map(([category, avg]) => (
+                    <div key={category} className="bg-muted rounded-lg p-3">
+                      <div className="text-lg font-bold text-primary">{avg}</div>
+                      <div className="text-xs text-muted-foreground capitalize">{category}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (confirm('Clear all uploaded data?')) {
+                    csvProcessor.clearData();
+                    setUploadResult(null);
+                  }
+                }}
+                className="mt-6 px-4 py-2 text-sm text-red-600 border border-red-600 rounded-lg hover:bg-red-500/10 transition-colors"
+              >
+                Clear All Data
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sensor Data Tab */}
+      {activeTab === "sensor" && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {sensorsData.length} sensors registered · {sensorsData.filter(s => s.health === "Good").length} active
+            </div>
+            <button className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border hover:bg-accent transition-colors">
+              <Plus className="w-4 h-4" />
+              Add Sensor
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {sensorsData.map((sensor) => (
+              <div
+                key={sensor.id}
+                className={cn(
+                  "bg-card rounded-2xl border p-5 transition-all",
+                  sensor.health === "Faulty" ? "border-red-500/30" : 
+                  sensor.health === "Warning" ? "border-yellow-500/30" : "border-border"
+                )}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      {sensor.health === "Good" && <Wifi className="w-4 h-4 text-green-500" />}
+                      {sensor.health === "Warning" && <Activity className="w-4 h-4 text-yellow-500" />}
+                      {sensor.health === "Faulty" && <WifiOff className="w-4 h-4 text-red-500" />}
+                      <span className="font-semibold text-foreground">{sensor.name}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {sensor.id} · {sensor.zone} · {sensor.category}
+                    </div>
+                  </div>
+                  <span className={cn(
+                    "text-xs font-medium px-2 py-1 rounded-full",
+                    sensor.health === "Good" && "bg-green-500/10 text-green-600",
+                    sensor.health === "Warning" && "bg-yellow-500/10 text-yellow-600",
+                    sensor.health === "Faulty" && "bg-red-500/10 text-red-600"
+                  )}>
+                    {sensor.health}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-muted rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-1">Reading</div>
+                    <div className="font-bold text-foreground">{sensor.reading}</div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-1">Last Ping</div>
+                    <div className="font-bold text-foreground">{sensor.lastPing}</div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleCalibrate(sensor.id)}
+                    disabled={calibrating === sensor.id || sensor.health === "Faulty"}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={cn("w-3.5 h-3.5", calibrating === sensor.id && "animate-spin")} />
+                    {calibrating === sensor.id ? "Calibrating..." : "Calibrate"}
+                  </button>
+                  <button
+                    onClick={() => handlePing(sensor.id)}
+                    disabled={pinging === sensor.id || sensor.health === "Faulty"}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    {pinging === sensor.id ? "Pinging..." : "Test Ping"}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {/* Manual Data Tab */}
-      {activeTab === "Manual Data" && (
-        <div className="max-w-xl space-y-5">
-          {submitted ? (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-6 text-center space-y-2">
-              <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
-              <div className="font-bold text-foreground">Data Submitted</div>
-              <p className="text-sm text-muted-foreground">Your manual entry has been submitted for approval.</p>
-              <button onClick={() => setSubmitted(false)} className="mt-2 text-sm text-primary hover:underline">Submit another entry</button>
+      {activeTab === "manual" && (
+        <div className="max-w-2xl mx-auto">
+          {manualSubmitted ? (
+            <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-8 text-center">
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-foreground mb-2">Data Submitted Successfully</h3>
+              <p className="text-sm text-muted-foreground">
+                Your manual entry has been recorded and will be reflected in the dashboard shortly.
+              </p>
             </div>
           ) : (
-            <div className="bg-card rounded-2xl border border-border p-6 space-y-4">
-              <h2 className="font-semibold text-foreground">Manual Data Entry</h2>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">Zone</label>
-                <select
-                  value={formState.wasteZone}
-                  onChange={(e) => setFormState((p) => ({ ...p, wasteZone: e.target.value }))}
-                  className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  {["Hostel Zone", "Block A", "Block B", "CSE Dept", "Main Campus"].map((z) => <option key={z}>{z}</option>)}
-                </select>
+            <div className="bg-card rounded-2xl border border-border p-6 space-y-5">
+              <div>
+                <h3 className="font-semibold text-foreground mb-1">Manual Data Entry</h3>
+                <p className="text-xs text-muted-foreground">
+                  Enter sustainability data manually when sensors are unavailable
+                </p>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">Waste Segregation %</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range" min={0} max={100} step={5}
-                    value={formState.wasteSeg}
-                    onChange={(e) => setFormState((p) => ({ ...p, wasteSeg: Number(e.target.value) }))}
-                    className="flex-1 accent-primary"
-                  />
-                  <span className="w-12 text-sm font-bold text-primary text-right">{formState.wasteSeg}%</span>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">Water Tanker Usage (Litres)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 5000"
-                  value={formState.waterTanker}
-                  onChange={(e) => setFormState((p) => ({ ...p, waterTanker: e.target.value }))}
-                  className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">Recycling Collection Weight (kg)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 120"
-                  value={formState.recyclingWeight}
-                  onChange={(e) => setFormState((p) => ({ ...p, recyclingWeight: e.target.value }))}
-                  className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">Event Name (optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Earth Day"
-                    value={formState.eventName}
-                    onChange={(e) => setFormState((p) => ({ ...p, eventName: e.target.value }))}
-                    className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">Category</label>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Zone</label>
                   <select
-                    value={formState.eventCategory}
-                    onChange={(e) => setFormState((p) => ({ ...p, eventCategory: e.target.value }))}
-                    className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    value={manualData.zone}
+                    onChange={(e) => setManualData({ ...manualData, zone: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
-                    {["Energy", "Water", "Waste", "Transport"].map((c) => <option key={c}>{c}</option>)}
+                    <option>Main Campus</option>
+                    <option>Block A</option>
+                    <option>Block B</option>
+                    <option>Hostel Zone</option>
+                    <option>CSE Dept</option>
+                    <option>Lab Block</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Category</label>
+                  <select
+                    value={manualData.category}
+                    onChange={(e) => setManualData({ ...manualData, category: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  >
+                    <option>Energy</option>
+                    <option>Water</option>
+                    <option>Waste</option>
+                    <option>Transport</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    Value {manualData.category === "Energy" && "(kWh)"}
+                    {manualData.category === "Water" && "(L)"}
+                    {manualData.category === "Waste" && "(kg)"}
+                    {manualData.category === "Transport" && "(trips)"}
+                  </label>
+                  <input
+                    type="number"
+                    value={manualData.value}
+                    onChange={(e) => setManualData({ ...manualData, value: e.target.value })}
+                    placeholder="Enter value"
+                    className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Notes (Optional)</label>
+                  <textarea
+                    value={manualData.notes}
+                    onChange={(e) => setManualData({ ...manualData, notes: e.target.value })}
+                    placeholder="Add any additional context or notes"
+                    rows={3}
+                    className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                  />
+                </div>
               </div>
 
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => {
-                    // Save draft logic
-                    alert("Draft saved locally");
-                  }}
-                  className="flex-1 py-2.5 text-sm rounded-xl border border-border text-muted-foreground hover:bg-secondary transition-colors"
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setManualData({ zone: "Main Campus", category: "Energy", value: "", notes: "" })}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors"
                 >
-                  Save Draft
+                  Clear
                 </button>
                 <button
-                  onClick={() => setSubmitted(true)}
-                  className="flex-1 py-2.5 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  onClick={handleManualSubmit}
+                  className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
-                  Submit for Approval
+                  Submit Data
                 </button>
               </div>
             </div>
@@ -273,126 +563,93 @@ export default function DataInputPage() {
         </div>
       )}
 
-      {/* CSV Upload Tab */}
-      {activeTab === "Upload CSV" && (
-        <div className="max-w-xl space-y-5">
-          <div className="bg-card rounded-2xl border border-border p-6 space-y-4">
-            <h2 className="font-semibold text-foreground">Bulk CSV Upload</h2>
-            <div className="bg-muted rounded-xl p-3 text-xs font-mono text-muted-foreground">
-              Expected columns: <span className="text-primary">timestamp, zone, category, value, source</span>
+      {/* Data Audit Tab */}
+      {activeTab === "audit" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Recent manual data submissions pending review
             </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-2 py-1 bg-yellow-500/10 text-yellow-600 rounded">
+                {auditEntries.filter(e => e.status === "Pending" && !auditActions[e.id]).length} Pending
+              </span>
+              <span className="px-2 py-1 bg-green-500/10 text-green-600 rounded">
+                {auditEntries.filter(e => e.status === "Approved" || auditActions[e.id] === "Approved").length} Approved
+              </span>
+              <span className="px-2 py-1 bg-red-500/10 text-red-600 rounded">
+                {auditEntries.filter(e => e.status === "Rejected" || auditActions[e.id] === "Rejected").length} Rejected
+              </span>
+            </div>
+          </div>
 
-            {!csvFile ? (
-              <div
-                className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/40 hover:bg-accent/30 transition-all"
-                onClick={() => setCsvFile("sample_data.csv")}
-              >
-                <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-                <p className="font-medium text-foreground">Drop CSV here or click to upload</p>
-                <p className="text-xs text-muted-foreground mt-1">Supports .csv files up to 10MB</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 p-3 bg-primary/10 rounded-xl">
-                  <FileText className="w-8 h-8 text-primary flex-shrink-0" />
-                  <div className="flex-1">
-                    <div className="font-medium text-sm">{csvFile}</div>
-                    <div className="text-xs text-muted-foreground">842 rows · 5 columns · 48KB</div>
+          <div className="space-y-3">
+            {auditEntries.map((entry) => (
+              <div key={entry.id} className="bg-card rounded-2xl border border-border p-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                    <Database className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  <button onClick={() => { setCsvFile(null); setCsvValidated(false); setCsvImported(false); }}>
-                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-red-500 transition-colors" />
-                  </button>
-                </div>
-
-                {csvValidated && (
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 text-green-600 font-semibold">
-                      <CheckCircle className="w-4 h-4" /> Validation Passed
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-sm text-foreground">{entry.submitter}</span>
+                      <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">{entry.id}</span>
+                      <span className="text-xs text-muted-foreground">·</span>
+                      <span className="text-xs text-muted-foreground">{entry.time}</span>
                     </div>
-                    <div className="text-muted-foreground">842 valid rows · 0 errors · Schema matched</div>
+                    <div className="text-sm text-muted-foreground">
+                      {entry.zone} · {entry.category} · {entry.value}
+                    </div>
                   </div>
-                )}
 
-                {csvImported && (
-                  <div className="bg-primary/10 border border-primary/30 rounded-xl p-3 text-xs text-primary font-medium flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" /> 842 records imported successfully
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "text-xs font-medium px-3 py-1 rounded-full whitespace-nowrap",
+                      (auditActions[entry.id] === "Approved" || (entry.status === "Approved" && !auditActions[entry.id])) && "bg-green-500/10 text-green-600",
+                      (auditActions[entry.id] === "Rejected" || (entry.status === "Rejected" && !auditActions[entry.id])) && "bg-red-500/10 text-red-600",
+                      entry.status === "Pending" && !auditActions[entry.id] && "bg-yellow-500/10 text-yellow-600"
+                    )}>
+                      {auditActions[entry.id] || entry.status}
+                    </span>
+
+                    {entry.status === "Pending" && !auditActions[entry.id] && (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleAuditAction(entry.id, "Approved")}
+                          className="px-3 py-1.5 text-xs font-medium bg-green-500/10 text-green-600 rounded-lg hover:bg-green-500/20 transition-colors"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleAuditAction(entry.id, "Rejected")}
+                          className="px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-600 rounded-lg hover:bg-red-500/20 transition-colors"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-
-                <div className="flex gap-2">
-                  {!csvValidated && (
-                    <button
-                      onClick={() => setCsvValidated(true)}
-                      className="flex-1 py-2.5 text-sm font-medium rounded-xl border border-border hover:bg-secondary transition-colors"
-                    >
-                      Validate
-                    </button>
-                  )}
-                  {csvValidated && !csvImported && (
-                    <button
-                      onClick={() => setCsvImported(true)}
-                      className="flex-1 py-2.5 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                    >
-                      Import Data
-                    </button>
-                  )}
                 </div>
               </div>
-            )}
+            ))}
           </div>
         </div>
       )}
 
-      {/* Data Audit Tab */}
-      {activeTab === "Data Audit" && (
-        <div className="space-y-4">
-          <div className="text-sm text-muted-foreground">Recent manual data submissions pending review</div>
-          {[
-            { id: "M001", submitter: "Block B Warden", zone: "Block B", category: "Waste", value: "72% segregation", time: "2h ago", status: "Pending" },
-            { id: "M002", submitter: "CSE Faculty", zone: "CSE Dept", category: "Energy", value: "12 kWh standby", time: "5h ago", status: "Approved" },
-            { id: "M003", submitter: "Hostel Admin", zone: "Hostel Zone", category: "Water", value: "8000L tanker", time: "1d ago", status: "Rejected" },
-            { id: "M004", submitter: "Sustainability Cell", zone: "Main Campus", category: "Transport", value: "45 EV trips", time: "1d ago", status: "Approved" },
-          ].map((entry) => (
-            <div key={entry.id} className="bg-card rounded-xl border border-border p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
-                <ClipboardList className="w-5 h-5 text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm text-foreground">{entry.submitter}</span>
-                  <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{entry.id}</span>
-                </div>
-                <div className="text-xs text-muted-foreground">{entry.zone} · {entry.category} · {entry.value} · {entry.time}</div>
-              </div>
-              <span className={cn(
-                "text-xs font-medium px-2.5 py-1 rounded-full",
-                auditActions[entry.id] === "Approved" ? "bg-green-500/10 text-green-600" :
-                auditActions[entry.id] === "Rejected" ? "bg-red-500/10 text-red-600" :
-                entry.status === "Approved" ? "bg-green-500/10 text-green-600" :
-                entry.status === "Rejected" ? "bg-red-500/10 text-red-600" : "bg-yellow-500/10 text-yellow-600"
-              )}>
-                {auditActions[entry.id] || entry.status}
-              </span>
-              {entry.status === "Pending" && !auditActions[entry.id] && (
-                <div className="flex gap-1">
-                  <button 
-                    onClick={() => setAuditActions(prev => ({ ...prev, [entry.id]: "Approved" }))}
-                    className="px-2.5 py-1.5 text-xs font-medium bg-green-500/10 text-green-600 rounded-lg hover:bg-green-500/20 transition-colors"
-                  >
-                    Approve
-                  </button>
-                  <button 
-                    onClick={() => setAuditActions(prev => ({ ...prev, [entry.id]: "Rejected" }))}
-                    className="px-2.5 py-1.5 text-xs font-medium bg-red-500/10 text-red-600 rounded-lg hover:bg-red-500/20 transition-colors"
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+      {/* Other tabs remain the same... */}
+      {activeTab !== "csv" && activeTab !== "sensor" && activeTab !== "manual" && activeTab !== "audit" && (
+        <div className="bg-card rounded-2xl border border-border p-12 text-center">
+          <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+          <p className="text-muted-foreground">
+            {activeTab === "sensor" && "Sensor data management coming soon"}
+            {activeTab === "manual" && "Manual data entry coming soon"}
+            {activeTab === "audit" && "Data audit coming soon"}
+          </p>
         </div>
       )}
     </div>
   );
 }
+
+

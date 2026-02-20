@@ -1,286 +1,331 @@
 "use client";
 
 import { useState } from "react";
-import {
-  FileText, Download, Share2, CheckSquare, Square,
-  BarChart3, Leaf, TrendingUp, Target, Clock,
-  ChevronRight, Eye,
-} from "lucide-react";
-import GreenGauge from "@/components/dashboard/GreenGauge";
+import { FileText, Download, Share2, ChevronDown, X } from "lucide-react";
+import { reportGenerator, ReportConfig } from "@/lib/report-generator";
 import { cn } from "@/lib/utils";
 
-const zones = ["Main Campus", "Hostel Zone", "Block A", "Block B", "CSE Dept"];
-const dateRanges = ["Last 7 days", "Last 30 days", "Last Quarter", "Custom"];
-
 export default function ReportsPage() {
-  const [selectedZone, setSelectedZone] = useState("Main Campus");
-  const [selectedRange, setSelectedRange] = useState("Last 7 days");
+  const [zone, setZone] = useState("Main Campus");
+  const [dateRange, setDateRange] = useState("Last 30 days");
   const [includeCharts, setIncludeCharts] = useState(true);
-  const [includeRecs, setIncludeRecs] = useState(true);
+  const [includeRecommendations, setIncludeRecommendations] = useState(true);
   const [includeRawData, setIncludeRawData] = useState(false);
-  const [generated, setGenerated] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrCode, setQrCode] = useState<string>("");
 
-  const handleGenerate = () => {
+  const config: ReportConfig = {
+    zone,
+    dateRange,
+    includeCharts,
+    includeRecommendations,
+    includeRawData,
+  };
+
+  const handleGeneratePDF = async () => {
     setGenerating(true);
-    setTimeout(() => { setGenerating(false); setGenerated(true); }, 1500);
+    try {
+      await reportGenerator.generatePDF(config);
+      alert('PDF report generated successfully!');
+    } catch (error) {
+      alert('Error generating PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setGenerating(false);
+    }
   };
 
-  const handleDownload = (format: "pdf" | "csv") => {
-    setDownloading(format);
-    setTimeout(() => {
-      const blob = new Blob([`Report data in ${format.toUpperCase()} format`], { 
-        type: format === "pdf" ? "application/pdf" : "text/csv" 
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `report-${selectedZone.replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setDownloading(null);
-    }, 800);
+  const handleGenerateCSV = () => {
+    setGenerating(true);
+    try {
+      reportGenerator.generateCSV(config);
+      alert('CSV report exported successfully!');
+    } catch (error) {
+      alert('Error generating CSV: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setGenerating(false);
+    }
   };
 
-  const handleShare = () => {
-    alert("Share link copied to clipboard!");
+  const handleShare = async () => {
+    try {
+      const qrDataURL = await reportGenerator.generateQRCode(config);
+      setQrCode(qrDataURL);
+      setQrModalOpen(true);
+    } catch (error) {
+      alert('Error generating QR code: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   };
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <FileText className="w-6 h-6 text-primary" />
-          Reports
-        </h1>
+        <h1 className="text-2xl font-bold text-foreground">Reports</h1>
         <p className="text-muted-foreground text-sm mt-0.5">Build, preview, and export sustainability reports</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Builder */}
-        <div className="lg:col-span-2 bg-card rounded-2xl border border-border p-6 space-y-5 h-fit">
-          <h2 className="font-semibold text-foreground">Report Builder</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Report Builder */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-card rounded-2xl border border-border p-5">
+            <h2 className="font-semibold text-foreground mb-4">Report Builder</h2>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Zone</label>
-            <select
-              value={selectedZone}
-              onChange={(e) => { setSelectedZone(e.target.value); setGenerated(false); }}
-              className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
+            {/* Zone Selection */}
+            <div className="mb-4">
+              <label className="text-sm font-medium text-foreground mb-2 block">Zone</label>
+              <select
+                value={zone}
+                onChange={(e) => setZone(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option>Main Campus</option>
+                <option>Block A</option>
+                <option>Block B</option>
+                <option>Hostel Zone</option>
+                <option>CSE Dept</option>
+                <option>Lab Block</option>
+              </select>
+            </div>
+
+            {/* Date Range */}
+            <div className="mb-4">
+              <label className="text-sm font-medium text-foreground mb-2 block">Date Range</label>
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option>Last 7 days</option>
+                <option>Last 30 days</option>
+                <option>Last 90 days</option>
+                <option>Last 6 months</option>
+                <option>Last year</option>
+              </select>
+            </div>
+
+            {/* Include Sections */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium text-foreground block">Include Sections</label>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeCharts}
+                  onChange={(e) => setIncludeCharts(e.target.checked)}
+                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span className="text-sm text-foreground">Charts & Visualizations</span>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeRecommendations}
+                  onChange={(e) => setIncludeRecommendations(e.target.checked)}
+                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span className="text-sm text-foreground">Recommendations</span>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeRawData}
+                  onChange={(e) => setIncludeRawData(e.target.checked)}
+                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span className="text-sm text-foreground">Raw Data Appendix (Admin)</span>
+              </label>
+            </div>
+
+            {/* Generate Button */}
+            <button
+              onClick={handleGeneratePDF}
+              disabled={generating}
+              className="w-full mt-6 px-4 py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {zones.map((z) => <option key={z}>{z}</option>)}
-            </select>
-          </div>
+              {generating ? 'Generating...' : 'Generate Report'}
+            </button>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Date Range</label>
-            <select
-              value={selectedRange}
-              onChange={(e) => { setSelectedRange(e.target.value); setGenerated(false); }}
-              className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
-            >
-              {dateRanges.map((d) => <option key={d}>{d}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Include Sections</label>
-            {[
-              { label: "Charts & Visualizations", key: "charts", val: includeCharts, set: setIncludeCharts },
-              { label: "Recommendations", key: "recs", val: includeRecs, set: setIncludeRecs },
-              { label: "Raw Data Appendix (Admin)", key: "raw", val: includeRawData, set: setIncludeRawData },
-            ].map((opt) => (
+            {/* Export Options */}
+            <div className="grid grid-cols-3 gap-2 mt-3">
               <button
-                key={opt.key}
-                onClick={() => { opt.set(!opt.val); setGenerated(false); }}
-                className="flex items-center gap-2.5 w-full py-2 text-sm hover:text-foreground transition-colors group"
+                onClick={handleGeneratePDF}
+                disabled={generating}
+                className="flex flex-col items-center gap-1 p-3 rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50"
               >
-                {opt.val ? (
-                  <CheckSquare className="w-4.5 h-4.5 text-primary" />
-                ) : (
-                  <Square className="w-4.5 h-4.5 text-muted-foreground" />
-                )}
-                <span className={cn(opt.val ? "text-foreground" : "text-muted-foreground")}>{opt.label}</span>
+                <FileText className="w-5 h-5 text-primary" />
+                <span className="text-xs font-medium">PDF</span>
               </button>
-            ))}
-          </div>
-
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className={cn(
-              "w-full py-3 text-sm font-semibold rounded-xl transition-all",
-              generating
-                ? "bg-primary/60 text-primary-foreground cursor-wait"
-                : "bg-primary text-primary-foreground hover:bg-primary/90"
-            )}
-          >
-            {generating ? (
-              <span className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Generating...
-              </span>
-            ) : (
-              "Generate Report"
-            )}
-          </button>
-
-          {generated && (
-            <div className="flex gap-2">
-              <button 
-                onClick={() => handleDownload("pdf")}
-                disabled={downloading === "pdf"}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl border border-border hover:bg-secondary transition-colors disabled:opacity-50"
+              <button
+                onClick={handleGenerateCSV}
+                disabled={generating}
+                className="flex flex-col items-center gap-1 p-3 rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50"
               >
-                <Download className="w-3.5 h-3.5" /> {downloading === "pdf" ? "Downloading..." : "PDF"}
+                <Download className="w-5 h-5 text-primary" />
+                <span className="text-xs font-medium">CSV</span>
               </button>
-              <button 
-                onClick={() => handleDownload("csv")}
-                disabled={downloading === "csv"}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl border border-border hover:bg-secondary transition-colors disabled:opacity-50"
-              >
-                <Download className="w-3.5 h-3.5" /> {downloading === "csv" ? "Downloading..." : "CSV"}
-              </button>
-              <button 
+              <button
                 onClick={handleShare}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl border border-border hover:bg-secondary transition-colors"
+                className="flex flex-col items-center gap-1 p-3 rounded-lg border border-border hover:bg-accent transition-colors"
               >
-                <Share2 className="w-3.5 h-3.5" /> Share
+                <Share2 className="w-5 h-5 text-primary" />
+                <span className="text-xs font-medium">Share</span>
               </button>
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Preview */}
-        <div className="lg:col-span-3">
-          {!generated ? (
-            <div className="bg-card rounded-2xl border border-dashed border-border h-full min-h-[400px] flex flex-col items-center justify-center gap-4 text-center p-8">
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                <Eye className="w-8 h-8 text-muted-foreground" />
-              </div>
+        {/* Report Preview */}
+        <div className="lg:col-span-2">
+          <div className="bg-card rounded-2xl border border-border p-6">
+            {/* Report Header */}
+            <div className="flex items-start justify-between mb-6 pb-6 border-b border-border">
               <div>
-                <div className="font-semibold text-foreground">Report Preview</div>
-                <p className="text-sm text-muted-foreground mt-1">Configure and generate a report to see the preview here</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <span className="text-xs font-medium text-primary uppercase tracking-wider">GreenIndex Report</span>
+                </div>
+                <h2 className="text-2xl font-bold text-foreground">{zone}</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {dateRange} · Generated {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-5xl font-black text-primary">73</div>
+                <div className="text-sm text-muted-foreground">Green Index</div>
               </div>
             </div>
-          ) : (
-            <div className="bg-card rounded-2xl border border-border overflow-hidden">
-              {/* Report Header */}
-              <div className="bg-primary/10 px-8 py-6 border-b border-border">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Leaf className="w-5 h-5 text-primary" />
-                      <span className="text-xs font-semibold text-primary uppercase tracking-wider">GreenIndex Report</span>
-                    </div>
-                    <h2 className="text-xl font-bold text-foreground">{selectedZone}</h2>
-                    <p className="text-sm text-muted-foreground">{selectedRange} · Generated Feb 19, 2026</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-black text-primary">73</div>
-                    <div className="text-xs text-muted-foreground">Green Index</div>
-                  </div>
-                </div>
+
+            {/* Key Metrics */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-green-500/10 rounded-xl p-4 text-center">
+                <div className="text-xs text-muted-foreground mb-1">Score Change</div>
+                <div className="text-2xl font-bold text-green-600">+3.4 pts</div>
+                <div className="text-xs text-muted-foreground">vs Last Period</div>
               </div>
+              <div className="bg-blue-500/10 rounded-xl p-4 text-center">
+                <div className="text-xs text-muted-foreground mb-1">Monthly Savings</div>
+                <div className="text-2xl font-bold text-blue-600">₹42,800</div>
+                <div className="text-xs text-muted-foreground">Cost Reduction</div>
+              </div>
+              <div className="bg-green-500/10 rounded-xl p-4 text-center">
+                <div className="text-xs text-muted-foreground mb-1">CO₂ Reduced</div>
+                <div className="text-2xl font-bold text-green-600">847 kg</div>
+                <div className="text-xs text-muted-foreground">This Period</div>
+              </div>
+            </div>
 
-              <div className="p-6 space-y-5">
-                {/* Summary */}
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: "vs Last Period", value: "+3.4 pts", icon: TrendingUp, color: "text-green-500" },
-                    { label: "Monthly Savings", value: "₹42,800", icon: Target, color: "text-primary" },
-                    { label: "CO₂ Reduced", value: "2.4 T", icon: Leaf, color: "text-green-600" },
-                  ].map((s) => {
-                    const Icon = s.icon;
-                    return (
-                      <div key={s.label} className="bg-muted rounded-xl p-3 text-center">
-                        <Icon className={cn("w-5 h-5 mx-auto mb-1", s.color)} />
-                        <div className={cn("font-bold text-sm", s.color)}>{s.value}</div>
-                        <div className="text-xs text-muted-foreground">{s.label}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Category scores */}
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-2">Category Scores</h3>
-                  {[
-                    { cat: "Energy", score: 68, color: "bg-yellow-500" },
-                    { cat: "Water", score: 74, color: "bg-blue-500" },
-                    { cat: "Waste", score: 61, color: "bg-green-500" },
-                    { cat: "Transport", score: 79, color: "bg-orange-500" },
-                  ].map((c) => (
-                    <div key={c.cat} className="flex items-center gap-3 py-1.5">
-                      <span className="text-xs text-muted-foreground w-16">{c.cat}</span>
-                      <div className="flex-1 h-2 bg-muted rounded-full">
-                        <div className={cn("h-full rounded-full", c.color)} style={{ width: `${c.score}%` }} />
-                      </div>
-                      <span className="text-xs font-bold text-foreground w-8 text-right">{c.score}</span>
+            {/* Category Scores */}
+            <div className="mb-6">
+              <h3 className="font-semibold text-foreground mb-3">Category Scores</h3>
+              <div className="space-y-3">
+                {[
+                  { name: 'Energy', score: 68, color: 'bg-yellow-500' },
+                  { name: 'Water', score: 74, color: 'bg-blue-500' },
+                  { name: 'Waste', score: 61, color: 'bg-green-500' },
+                  { name: 'Transport', score: 79, color: 'bg-orange-500' },
+                ].map((cat) => (
+                  <div key={cat.name} className="flex items-center gap-3">
+                    <div className="w-24 text-sm font-medium text-foreground">{cat.name}</div>
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className={cn("h-full rounded-full", cat.color)} style={{ width: `${cat.score}%` }} />
                     </div>
-                  ))}
-                </div>
-
-                {/* Top Issues */}
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-2">Top Issues Identified</h3>
-                  {[
-                    "Block B peak usage +18% → −6 pts",
-                    "Waste segregation missing in Hostel 2 → −4 pts",
-                    "Water leak suspected in Lab Block → −3 pts",
-                  ].map((issue, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground py-1">
-                      <ChevronRight className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
-                      {issue}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Actions */}
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-2">Actions Tracker</h3>
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div className="bg-green-500/10 rounded-xl p-2">
-                      <div className="font-bold text-green-600">3</div>
-                      <div className="text-muted-foreground">Completed</div>
-                    </div>
-                    <div className="bg-yellow-500/10 rounded-xl p-2">
-                      <div className="font-bold text-yellow-600">2</div>
-                      <div className="text-muted-foreground">In Progress</div>
-                    </div>
-                    <div className="bg-red-500/10 rounded-xl p-2">
-                      <div className="font-bold text-red-600">4</div>
-                      <div className="text-muted-foreground">Pending</div>
-                    </div>
+                    <div className="w-12 text-sm font-bold text-foreground text-right">{cat.score}</div>
                   </div>
-                </div>
+                ))}
+              </div>
+            </div>
 
-                {includeRecs && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">Recommendations</h3>
-                    {[
-                      "Implement auto-off policy for ACs in Block B after 10 PM",
-                      "Deploy color-coded waste bins in Hostel 2",
-                      "Install flow sensors to detect pipe leakage in Lab Block",
-                      "Convert remaining 60 lights to LED in Phase 2",
-                    ].map((rec, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground py-1">
-                        <div className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center flex-shrink-0 mt-0.5 text-[10px] font-bold">{i + 1}</div>
-                        {rec}
-                      </div>
-                    ))}
+            {/* Top Issues */}
+            <div className="mb-6">
+              <h3 className="font-semibold text-foreground mb-3">Top Issues Identified</h3>
+              <div className="space-y-2">
+                {[
+                  { title: 'Block B peak usage +18%', impact: '-6 pts', zone: 'Block B' },
+                  { title: 'Waste segregation missing in Hostel 2', impact: '-4 pts', zone: 'Hostel Zone' },
+                  { title: 'Water leak suspected in Lab Block', impact: '-3 pts', zone: 'Lab Block' },
+                ].map((issue, index) => (
+                  <div key={index} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <div className="w-1 h-8 bg-red-500 rounded-full" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-foreground">{issue.title}</div>
+                      <div className="text-xs text-muted-foreground">{issue.zone}</div>
+                    </div>
+                    <div className="text-sm font-bold text-red-600">{issue.impact}</div>
                   </div>
-                )}
+                ))}
+              </div>
+            </div>
 
-                <div className="text-center text-xs text-muted-foreground border-t border-border pt-4">
-                  GreenIndex Campus Sustainability OS · v1.0 · Confidential
+            {/* Actions Tracker */}
+            <div>
+              <h3 className="font-semibold text-foreground mb-3">Actions Tracker</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-green-500/10 rounded-lg p-4 text-center">
+                  <div className="text-3xl font-bold text-green-600">3</div>
+                  <div className="text-xs text-muted-foreground">Completed</div>
+                </div>
+                <div className="bg-yellow-500/10 rounded-lg p-4 text-center">
+                  <div className="text-3xl font-bold text-yellow-600">7</div>
+                  <div className="text-xs text-muted-foreground">In Progress</div>
+                </div>
+                <div className="bg-red-500/10 rounded-lg p-4 text-center">
+                  <div className="text-3xl font-bold text-red-600">4</div>
+                  <div className="text-xs text-muted-foreground">Pending</div>
                 </div>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Footer Info */}
+          <div className="mt-4 text-center text-xs text-muted-foreground">
+            <p>Data last updated: Feb 19, 2026 – 11:42 AM</p>
+            <p className="mt-1">v1.0.0</p>
+          </div>
         </div>
       </div>
+
+      {/* QR Code Modal */}
+      {qrModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-primary" />
+                <h3 className="font-bold text-foreground">Share Report</h3>
+              </div>
+              <button onClick={() => setQrModalOpen(false)}>
+                <X className="w-5 h-5 text-muted-foreground hover:text-foreground" />
+              </button>
+            </div>
+            <div className="p-6 text-center">
+              <p className="text-sm text-muted-foreground mb-4">
+                Scan this QR code to view the report
+              </p>
+              {qrCode && (
+                <img src={qrCode} alt="QR Code" className="mx-auto rounded-lg border border-border" />
+              )}
+              <div className="mt-4 p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground">Zone: {zone}</p>
+                <p className="text-xs text-muted-foreground">Period: {dateRange}</p>
+                <p className="text-xs text-muted-foreground">Score: 73</p>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  alert('Link copied to clipboard!');
+                }}
+                className="mt-4 w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+              >
+                Copy Link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

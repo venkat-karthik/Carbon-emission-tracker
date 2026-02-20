@@ -340,48 +340,71 @@ export default function SimulatorPage() {
             </div>
 
             {/* Action buttons */}
-            <div className="mt-4 space-y-2">
+            <div className="mt-5 space-y-2">
               {showSaveInput ? (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Scenario name..."
-                    value={scenarioName}
-                    onChange={(e) => setScenarioName(e.target.value)}
-                    className="flex-1 px-3 py-2 text-sm bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    autoFocus
-                  />
-                  <button onClick={saveScenario} className="px-3 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-xl">
-                    Save
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Scenario name..."
+                      value={scenarioName}
+                      onChange={(e) => setScenarioName(e.target.value)}
+                      className="flex-1 px-3 py-2 text-sm bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      autoFocus
+                      onKeyDown={(e) => e.key === 'Enter' && saveScenario()}
+                    />
+                    <button 
+                      onClick={saveScenario} 
+                      disabled={!scenarioName.trim()}
+                      className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => { setShowSaveInput(false); setScenarioName(""); }}
+                    className="w-full py-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Cancel
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => setShowSaveInput(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                >
-                  <Save className="w-4 h-4" /> Save Scenario
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowSaveInput(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+                  >
+                    <Save className="w-4 h-4" /> Save Scenario
+                  </button>
+                  <button
+                    onClick={() => {
+                      setApplyTarget(!applyTarget);
+                      if (!applyTarget) {
+                        setTimeout(() => {
+                          alert(`Target set to ${result.score} points!\n\nThis scenario is now your sustainability goal.`);
+                        }, 100);
+                      }
+                    }}
+                    className={cn(
+                      "w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl border-2 transition-all",
+                      applyTarget
+                        ? "bg-green-500 text-white border-green-500 shadow-lg shadow-green-500/30"
+                        : "border-primary text-primary hover:bg-primary/10"
+                    )}
+                  >
+                    <Target className="w-4 h-4" />
+                    {applyTarget ? "✓ Target Applied!" : "Set as Target"}
+                  </button>
+                  <button 
+                    onClick={handleExportPDF}
+                    disabled={exporting}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl border-2 border-border hover:bg-secondary transition-colors disabled:opacity-50"
+                  >
+                    <Download className="w-4 h-4" /> 
+                    {exporting ? "Exporting..." : "Export Report PDF"}
+                  </button>
+                </>
               )}
-              <button
-                onClick={() => setApplyTarget(!applyTarget)}
-                className={cn(
-                  "w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl border transition-all",
-                  applyTarget
-                    ? "bg-green-500/15 text-green-600 border-green-500/30"
-                    : "border-border hover:bg-secondary"
-                )}
-              >
-                <Target className="w-4 h-4" />
-                {applyTarget ? "Target Applied!" : "Apply as Target"}
-              </button>
-              <button 
-                onClick={handleExportPDF}
-                disabled={exporting}
-                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl border border-border hover:bg-secondary transition-colors disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" /> {exporting ? "Exporting..." : "Export PDF"}
-              </button>
             </div>
           </div>
         </div>

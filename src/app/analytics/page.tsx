@@ -15,6 +15,7 @@ import {
   greenIndexTrend, peakHeatmapData, penaltiesCredits, analyticsInsights,
 } from "@/lib/mock-data";
 import { iotManager } from "@/lib/iot-sensors";
+import { csvProcessor } from "@/lib/csv-processor";
 import { cn } from "@/lib/utils";
 
 const categories = ["All", "Energy", "Water", "Waste", "Transport"];
@@ -57,6 +58,7 @@ export default function AnalyticsPage() {
   const [downloading, setDownloading] = useState(false);
   const [selectedHeatmapCell, setSelectedHeatmapCell] = useState<{day: string, hour: string, value: number} | null>(null);
   const [sensorData, setSensorData] = useState<any>(null);
+  const [csvData, setCSVData] = useState<any[]>([]);
 
   // Handle category query param
   useEffect(() => {
@@ -108,8 +110,17 @@ export default function AnalyticsPage() {
       setSensorData(reading);
     });
 
+    // Subscribe to CSV data updates
+    const unsubscribeCSV = csvProcessor.subscribe((data) => {
+      setCSVData(data);
+    });
+
+    // Load initial CSV data
+    setCSVData(csvProcessor.getUploadedData());
+
     return () => {
       unsubscribe();
+      unsubscribeCSV();
       iotManager.stopRealTimeUpdates();
     };
   }, []);
