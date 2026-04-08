@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis,
@@ -45,7 +45,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export default function AnalyticsPage() {
+function AnalyticsContent() {
   const searchParams = useSearchParams();
   const categoryParam = searchParams.get("category");
 
@@ -507,5 +507,13 @@ export default function AnalyticsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AnalyticsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-muted-foreground">Loading analytics...</div>}>
+      <AnalyticsContent />
+    </Suspense>
   );
 }
